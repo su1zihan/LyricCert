@@ -10,9 +10,9 @@ A content rating system for song lyrics. Paste a song, get an audience rating ac
 pip install -r requirements.txt
 ```
 
-**2. Download the model**
+**2. Set up the model**
 
-[Download the model checkpoint](https://drive.google.com/drive/folders/1H-nVC4Q8OO_n_Bw5WyWgUKnXmjKHoDj8?usp=drive_link) from Google Drive, unzip it, and place the contents in a folder named `model/` next to `api.py`.
+The trained model is provided as `model.zip` in the supplementary materials. Unzip it and place the resulting `model/` folder next to `api.py`.
 
 ```
 LyricCert/
@@ -22,7 +22,10 @@ LyricCert/
 └── model/
     ├── config.json
     ├── model.safetensors
-    └── ...
+    ├── tokenizer_config.json
+    ├── vocab.json
+    ├── merges.txt
+    └── special_tokens_map.json
 ```
 
 ## Run
@@ -63,7 +66,7 @@ Use the icon in the top right of the page to switch between light and dark mode.
 The backend is not running. Open a terminal in the project folder and run `uvicorn api:app --port 8000`.
 
 **"Model not loaded"**
-The `model/` folder is missing or incomplete. Download the checkpoint again and make sure the folder sits next to `api.py`.
+The `model/` folder is missing or incomplete. Make sure `model.zip` was fully unzipped and the resulting folder sits next to `api.py`. The folder should contain `config.json`, `model.safetensors`, and the tokenizer files (`vocab.json`, `merges.txt`, `tokenizer_config.json`, `special_tokens_map.json`).
 
 **Slow first analysis**
 The first run on a fresh machine downloads NLTK data. Wait a minute, then try again.

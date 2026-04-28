@@ -47,6 +47,16 @@ Double-click `lyriccert.html` to open it in your browser.
 
 Use the icon in the top right of the page to switch between light and dark mode.
 
+## Rating system
+
+| Rating | Audience | Criteria |
+|--------|----------|----------|
+| M-E    | Everyone | Minimal mature content across all categories |
+| M-P    | Parental Guidance | Mild content, suitable for most audiences with parental awareness |
+| M-T    | Teen Audiences | Moderate content themes appropriate for teenagers |
+| M-R    | Restricted | Strong mature content, adult supervision recommended |
+| M-AO   | Adults Only | Intense explicit content, 18+ only |
+
 ## Troubleshooting
 
 **"Cannot reach the inference backend"**

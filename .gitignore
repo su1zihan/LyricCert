@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+lyriccert/
+interface/lyriccert/
+
+# Build/test tooling
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local model artifacts (usually large)
+model/
+interface/model/

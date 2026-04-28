@@ -21,7 +21,7 @@ AI-powered music content analysis system that provides content ratings for song 
 **1. Clone the repository**
 
 ```bash
-cd LyricCert/5_interface
+cd LyricCert/interface
 ```
 
 **2. Create virtual environment (optional but recommended)**
@@ -54,7 +54,7 @@ Download the pre-trained checkpoint from the link below and place it inside a ne
 
 After downloading:
 1. Unzip the archive
-2. Create a folder named `model/` **one level above** `5_interface/`
+2. Create a folder named `model/` **one level above** `interface/`
 3. Copy all files from the unzipped folder into `LyricCert/model/`
 
 Your project structure should look like:
@@ -65,7 +65,7 @@ LyricCert/
 │   ├── config.json
 │   ├── pytorch_model.bin
 │   └── ...
-└── 5_interface/
+└── interface/
     ├── app.py
     ├── api.py
     ├── music_content_rating.py
@@ -78,7 +78,7 @@ LyricCert/
 ### Streamlit App (original interface)
 
 ```bash
-cd 5_interface
+cd interface
 streamlit run app.py
 ```
 
@@ -91,7 +91,7 @@ The conference webpage requires the FastAPI backend to be running alongside.
 **Step 1 — Start the FastAPI backend:**
 
 ```bash
-cd 5_interface
+cd interface
 uvicorn api:app --port 8000
 ```
 
@@ -144,7 +144,7 @@ streamlit run app.py -- --model-path /path/to/your/model
 ## Troubleshooting
 
 **Model not loading**
-- Ensure all model files are in the `model/` directory (one level above `5_interface/`)
+- Ensure all model files are in the `model/` directory (one level above `interface/`)
 - Check that file names match the Hugging Face format
 - Verify PyTorch and Transformers versions are compatible
 

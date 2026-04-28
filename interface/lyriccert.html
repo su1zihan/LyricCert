@@ -1,772 +1,1408 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <title>LyricCert</title>
+<meta name="description" content="An automatic content rating for any song's lyrics. Five tiers, four content dimensions.">
+
+<!-- Configure the inference backend URL here for deployment.
+     Defaults to localhost:8000 when running the FastAPI server locally. -->
+<meta name="lc-api-url" content="http://localhost:8000/analyze">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
+/* ── reset + root ────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+a { color: inherit; }
 
 :root {
-  --ink: #0a0a0a;
-  --ink-soft: #3a3a3a;
-  --ink-muted: #888;
-  --ink-ghost: #bbb;
-  --surface: #fafaf8;
-  --white: #ffffff;
-  --line: rgba(0,0,0,0.08);
-  --line-strong: rgba(0,0,0,0.14);
-  --green: #1a8a5c;
-  --green-pale: #e8f5ee;
-  --blue: #1a5ca8;
-  --blue-pale: #e8eef8;
-  --amber: #b06a10;
-  --amber-pale: #fdf0e0;
-  --red: #b02020;
-  --red-pale: #fce8e8;
-  --purple: #6b38b0;
-  --purple-pale: #f0eaff;
+  --bg:           #F4F1EA;
+  --bg-elev:      #FAF8F3;
+  --surface:      #FFFFFF;
+  --fg:           #14110D;
+  --fg-soft:      #3E3A33;
+  --fg-muted:     #6E6962;
+  --fg-faint:     #A39E96;
+  --line:         rgba(20, 17, 13, 0.08);
+  --line-strong:  rgba(20, 17, 13, 0.16);
+  --hairline:     rgba(20, 17, 13, 0.06);
+
+  /* tier colours: for tier badges */
+  --tier-e:  #4F7A52;
+  --tier-p:  #4A6B82;
+  --tier-t:  #A87332;
+  --tier-r:  #9E3F3F;
+  --tier-ao: #6E2424;
+
+  /* category colours: only used in the static example card  */
+  --cat-sexual:    #9E3F3F;
+  --cat-violence:  #A87332;
+  --cat-substance: #6F4F8E;
+  --cat-language:  #4A6B82;
+  --cat-sexual-pale:    rgba(158, 63, 63, 0.10);
+  --cat-violence-pale:  rgba(168, 115, 50, 0.10);
+  --cat-substance-pale: rgba(111, 79, 142, 0.10);
+  --cat-language-pale:  rgba(74, 107, 130, 0.10);
+
+  --shadow:  0 4px 24px rgba(20,17,13,0.06);
+
+  --font:  'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono:  'Geist Mono', 'SF Mono', Menlo, monospace;
 }
 
-html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+[data-theme="dark"] {
+  --bg:           #0E0C0A;
+  --bg-elev:      #161310;
+  --surface:      #1B1814;
+  --fg:           #ECE8DF;
+  --fg-soft:      #C5C1B7;
+  --fg-muted:     #8E8A82;
+  --fg-faint:     #5C5852;
+  --line:         rgba(236, 232, 223, 0.10);
+  --line-strong:  rgba(236, 232, 223, 0.20);
+  --hairline:     rgba(236, 232, 223, 0.06);
+
+  --tier-e:  #88B58B;
+  --tier-p:  #8AA8C2;
+  --tier-t:  #D9A968;
+  --tier-r:  #D87878;
+  --tier-ao: #C45050;
+
+  --cat-sexual:    #D87878;
+  --cat-violence:  #D9A968;
+  --cat-substance: #B091CC;
+  --cat-language:  #8AA8C2;
+  --cat-sexual-pale:    rgba(216, 120, 120, 0.12);
+  --cat-violence-pale:  rgba(217, 169, 104, 0.12);
+  --cat-substance-pale: rgba(176, 145, 204, 0.12);
+  --cat-language-pale:  rgba(138, 168, 194, 0.12);
+
+  --shadow:  0 4px 24px rgba(0,0,0,0.4);
+}
 
 body {
-  font-family: 'DM Sans', -apple-system, sans-serif;
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 16px;
-  line-height: 1.6;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
+::selection { background: var(--fg); color: var(--bg); }
+.tabular { font-variant-numeric: tabular-nums; }
 
-/* NAV */
+/* ── nav ────────────────────────────────────────────── */
 nav {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
-  background: rgba(250, 250, 248, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--line);
+  height: 60px;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
 }
 .nav-inner {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 0 2rem;
-  height: 56px;
+  height: 100%;
+  padding: 0 2.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.nav-logo {
-  font-family: 'DM Serif Display', serif;
-  font-size: 1.25rem;
-  color: var(--ink);
+.nav-mark {
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--fg);
+  text-decoration: none;
 }
-.nav-links { display: flex; gap: 2rem; }
-.nav-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.875rem;
+.nav-mark .dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  background: var(--tier-r);
+  border-radius: 50%;
+  margin-left: 3px;
+  vertical-align: 1px;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+.nav-link {
+  font-size: 0.8125rem;
   font-weight: 400;
-  color: var(--ink-soft);
-  padding: 0;
-  transition: color 0.2s;
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition: color 0.15s;
 }
-.nav-btn:hover { color: var(--ink); }
-.btn-primary, .btn-secondary { font-family: 'DM Sans', sans-serif; cursor: pointer; }
+.nav-link:hover { color: var(--fg); }
 
-/* HERO */
+.theme-toggle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-soft);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.theme-toggle:hover { border-color: var(--line-strong); color: var(--fg); background: var(--bg-elev); }
+.theme-toggle svg { width: 14px; height: 14px; }
+[data-theme="light"] .icon-moon { display: block; }
+[data-theme="light"] .icon-sun  { display: none; }
+[data-theme="dark"]  .icon-moon { display: none; }
+[data-theme="dark"]  .icon-sun  { display: block; }
+
+/* ── hero ───────────────────────────────────────────── */
 .hero {
-  min-height: 100vh;
+  padding: 10rem 2.5rem 5rem;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.hero-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 1rem;
+  background: color-mix(in srgb, var(--tier-e) 8%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tier-e) 25%, transparent);
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tier-e);
+  margin-bottom: 2rem;
+  opacity: 0;
+  animation: fadeUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s forwards;
+}
+.hero-meta::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--tier-e);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hero-title {
+  font-weight: 500;
+  font-size: clamp(2.75rem, 7vw, 5.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--fg);
+  max-width: 18ch;
+  margin-bottom: 1.75rem;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s forwards;
+}
+
+.hero-sub {
+  font-size: clamp(1rem, 1.4vw, 1.125rem);
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--fg-soft);
+  max-width: 40rem;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s forwards;
+}
+
+.hero-strip {
+  margin-top: 5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  max-width: 36rem;
+  opacity: 0;
+  animation: fadeUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s forwards;
+}
+.strip-num {
+  font-weight: 500;
+  font-size: 1.875rem;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.4rem;
+}
+.strip-label {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ── sections ───────────────────────────────────────── */
+section {
+  padding: 6rem 2.5rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  border-top: 1px solid var(--hairline);
+}
+
+.section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg);
+  margin-bottom: 1.75rem;
+}
+.section-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--fg);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.section-title {
+  font-weight: 500;
+  font-size: clamp(1.875rem, 3.5vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--fg);
+  margin-bottom: 1.25rem;
+  max-width: 24ch;
+}
+
+.section-lede {
+  font-size: 1rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg-soft);
+  max-width: 40rem;
+}
+
+/* ── analyzer ───────────────────────────────────────── */
+.analyzer {
+  margin-top: 3rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-head {
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.panel-head .label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.panel-head .meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+#lyrics-input {
+  flex: 1;
+  width: 100%;
+  min-height: 360px;
+  padding: 1.5rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--fg);
+  resize: none;
+}
+#lyrics-input::placeholder { color: var(--fg-faint); }
+
+.panel-foot {
+  padding: 0.75rem 0.875rem;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.btn {
+  font-family: var(--font);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.65rem 1.25rem;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+  flex: 1;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-clear {
+  color: var(--fg-muted);
+  border: 1px solid var(--line);
+}
+.btn-clear:hover { border-color: var(--line-strong); color: var(--fg); }
+
+.result-panel { min-height: 460px; }
+
+.empty-state, .loading-state {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 2rem 6rem;
-  text-align: center;
-  position: relative;
+  gap: 0.875rem;
+  color: var(--fg-faint);
+  padding: 2rem;
 }
-.hero::before {
-  content: '';
-  position: absolute;
-  top: -200px; left: 50%;
-  transform: translateX(-50%);
-  width: 900px; height: 600px;
-  background: radial-gradient(ellipse at center, rgba(26,138,92,0.07) 0%, transparent 65%);
-  pointer-events: none;
-}
-.hero-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--green);
-  background: var(--green-pale);
-  border: 1px solid rgba(26,138,92,0.15);
-  padding: 0.35rem 1rem;
-  border-radius: 100px;
-  margin-bottom: 2.5rem;
-  opacity: 0;
-  animation: fadeUp 0.6s ease 0.1s forwards;
-}
-.hero-eyebrow::before {
-  content: '';
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-}
-.hero-title {
-  font-family: 'DM Serif Display', serif;
-  font-size: clamp(3.5rem, 8vw, 7rem);
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  margin-bottom: 1.5rem;
-  opacity: 0;
-  animation: fadeUp 0.6s ease 0.2s forwards;
-}
-.hero-title em { font-style: normal; color: var(--ink); }
-.hero-subtitle {
-  font-size: clamp(1rem, 2vw, 1.1rem);
+.loading-state { display: none; }
+.empty-state .empty-icon {
+  font-size: 1.75rem;
   font-weight: 300;
-  color: var(--ink-soft);
-  max-width: 520px;
-  line-height: 1.65;
-  opacity: 0;
-  animation: fadeUp 0.6s ease 0.3s forwards;
-  margin-bottom: 3rem;
+  color: var(--fg-faint);
 }
-.hero-cta {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  opacity: 0;
-  animation: fadeUp 0.6s ease 0.4s forwards;
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--ink);
-  color: var(--white);
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 0.75rem 1.75rem;
-  border-radius: 100px;
-  text-decoration: none;
-  border: none;
-  transition: opacity 0.2s;
-}
-.btn-primary:hover { opacity: 0.8; }
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-  font-weight: 400;
-  padding: 0.75rem 1.75rem;
-  border-radius: 100px;
-  border: 1px solid var(--line-strong);
-  text-decoration: none;
-  transition: border-color 0.2s, color 0.2s;
-}
-.btn-secondary:hover { border-color: var(--ink-soft); color: var(--ink); }
-
-/* HERO DEMO CARD */
-.hero-demo {
-  margin-top: 5rem;
-  width: 100%;
-  max-width: 780px;
-  opacity: 0;
-  animation: fadeUp 0.8s ease 0.5s forwards;
-}
-.demo-card {
-  background: var(--white);
-  border: 1px solid var(--line-strong);
-  border-radius: 24px;
-  padding: 2.5rem;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 2.5rem;
-  align-items: center;
-  box-shadow: 0 2px 40px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
-}
-.demo-badge {
-  width: 90px; height: 90px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column; flex-shrink: 0;
-}
-.demo-badge-label { font-family: 'DM Serif Display', serif; font-size: 1.4rem; line-height: 1; }
-.demo-badge-sub { font-size: 0.55rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
-.demo-info { text-align: left; }
-.demo-song { font-size: 1.1rem; font-weight: 500; margin-bottom: 0.25rem; }
-.demo-artist { font-size: 0.875rem; color: var(--ink-muted); margin-bottom: 1rem; }
-.demo-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.demo-tag { font-size: 0.75rem; font-weight: 500; padding: 0.25rem 0.75rem; border-radius: 100px; border: 1px solid; }
-.demo-bars { display: flex; flex-direction: column; gap: 0.7rem; min-width: 160px; }
-.demo-bar-row { display: flex; flex-direction: column; gap: 4px; }
-.demo-bar-header { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--ink-muted); }
-.demo-bar-track { height: 4px; background: var(--line); border-radius: 100px; overflow: hidden; }
-.demo-bar-fill { height: 100%; border-radius: 100px; }
-
-/* SECTIONS */
-.section { padding: 7rem 2rem; }
-.section-inner { max-width: 1100px; margin: 0 auto; }
-.section-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-ghost);
-  margin-bottom: 1rem;
-}
-.section-title {
-  font-family: 'DM Serif Display', serif;
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  color: var(--ink);
-  margin-bottom: 1.5rem;
-}
-.section-title em { font-style: normal; color: var(--ink); }
-.section-body {
-  font-size: 1rem;
+.empty-state p {
+  font-size: 0.875rem;
   font-weight: 300;
-  color: var(--ink-soft);
-  max-width: 520px;
-  line-height: 1.7;
+  color: var(--fg-muted);
 }
-
-/* HOW IT WORKS */
-.how-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5px;
-  background: var(--line);
-  border: 1.5px solid var(--line);
-  border-radius: 20px;
-  overflow: hidden;
-  margin-top: 4rem;
-}
-.how-step { background: var(--white); padding: 2.5rem; }
-.how-step:first-child { border-radius: 18px 0 0 18px; }
-.how-step:last-child  { border-radius: 0 18px 18px 0; }
-.how-num {
-  font-family: 'DM Serif Display', serif;
-  font-size: 3rem;
-  color: var(--line-strong);
-  line-height: 1;
-  margin-bottom: 1.5rem;
-}
-.how-step-title { font-size: 1rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--ink); }
-.how-step-body { font-size: 0.875rem; font-weight: 300; color: var(--ink-soft); line-height: 1.65; }
-
-/* RATINGS */
-.ratings-list { display: flex; flex-direction: column; }
-.rating-row {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.1rem 0;
-  border-bottom: 1px solid var(--line);
-  transition: padding-left 0.2s;
-}
-.rating-row:last-child { border-bottom: none; }
-.rating-row:hover { padding-left: 0.4rem; }
-.rating-pill {
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'DM Serif Display', serif;
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-.rating-row-name { font-size: 0.9rem; font-weight: 500; }
-.rating-row-desc { font-size: 0.78rem; color: var(--ink-muted); margin-top: 2px; font-weight: 300; }
-
-/* EXAMPLE CARD */
-.ratings-example-card {
-  background: var(--white);
-  border: 1px solid var(--line-strong);
-  border-radius: 16px;
-  padding: 1.75rem;
-  box-shadow: 0 2px 20px rgba(0,0,0,0.04);
-}
-.rec-card-header {
-  display: flex; align-items: center; gap: 1rem;
-  margin-bottom: 1.25rem; padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--line);
-}
-.rec-badge-large {
-  width: 56px; height: 56px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column; flex-shrink: 0;
-}
-.rec-badge-large .label { font-family: 'DM Serif Display', serif; font-size: 1rem; line-height: 1; }
-.rec-badge-large .sub { font-size: 0.48rem; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; font-weight: 500; }
-.rec-title { font-size: 0.9rem; font-weight: 500; }
-.rec-subtitle { font-size: 0.78rem; color: var(--ink-muted); margin-top: 2px; font-weight: 300; }
-.content-score-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.625rem; }
-.score-item { padding: 0.75rem; border-radius: 10px; border: 1px solid var(--line); }
-.score-item-label { font-size: 0.65rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-muted); margin-bottom: 0.4rem; }
-.score-item-value { font-family: 'DM Serif Display', serif; font-size: 1.3rem; font-weight: 400; }
-.score-item-bar { height: 3px; border-radius: 100px; background: var(--line); margin-top: 0.4rem; overflow: hidden; }
-.score-item-fill { height: 100%; border-radius: 100px; }
-
-/* STAT ROW */
-.stat-row { display: flex; gap: 2.5rem; }
-.stat-num { font-family: 'DM Serif Display', serif; font-size: 2.75rem; line-height: 1; color: var(--ink); }
-.stat-label { font-size: 0.78rem; color: var(--ink-muted); margin-top: 0.25rem; font-weight: 300; }
-
-/* FOOTER */
-footer { border-top: 1px solid var(--line); padding: 2.5rem 2rem; }
-.footer-inner {
-  max-width: 1100px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.footer-logo { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: var(--ink); }
-.footer-copy { font-size: 0.78rem; color: var(--ink-ghost); }
-
-/* ANIMATIONS */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.reveal {
-  opacity: 0; transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-.reveal.visible { opacity: 1; transform: none; }
-hr.rule { border: none; border-top: 1px solid var(--line); }
 
 .spinner {
-  width: 28px; height: 28px;
-  border: 2px solid var(--line);
-  border-top-color: var(--ink);
+  width: 22px; height: 22px;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--fg);
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 768px) {
-  .demo-card { grid-template-columns: 1fr; text-align: center; }
-  .demo-bars { min-width: auto; }
-  .how-grid { grid-template-columns: 1fr; }
-  .how-step:first-child { border-radius: 18px 18px 0 0; }
-  .how-step:last-child  { border-radius: 0 0 18px 18px; }
-  .how-bottom-grid { grid-template-columns: 1fr !important; }
-  .demo-layout { grid-template-columns: 1fr !important; }
-  .nav-links { display: none; }
-  .footer-inner { flex-direction: column; gap: 0.5rem; text-align: center; }
+.result-content {
+  display: none;
+  padding: 1.75rem;
+  flex: 1;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: fadeIn 0.4s ease;
+}
+
+.result-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.25rem;
+  align-items: center;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.result-tier {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid currentColor;
+}
+.result-tier .tier-letter {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.result-tier .tier-sub {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 5px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.result-name {
+  font-weight: 500;
+  font-size: 1.375rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  margin-bottom: 0.4rem;
+}
+.result-name .code {
+  font-family: var(--mono);
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--fg-muted);
+  margin-left: 0.5rem;
+}
+.result-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.result-flag .dot { width: 5px; height: 5px; border-radius: 50%; }
+
+.result-explanation {
+  font-size: 0.9375rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg-soft);
+}
+
+.result-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.result-tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-soft);
+}
+.result-tag.empty {
+  border-style: dashed;
+  color: var(--fg-faint);
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+
+/* result: bars + radar split */
+.result-viz {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hairline);
+}
+.result-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.result-scores-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.25rem;
+}
+.score-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 44px;
+  align-items: center;
+  gap: 0.875rem;
+}
+.score-name {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--fg-soft);
+}
+.score-track {
+  height: 1px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.score-fill {
+  position: absolute;
+  inset: 0 100% 0 0;
+  background: var(--fg);
+  transition: right 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.score-row.is-high .score-fill { background: var(--accent); }
+.score-row.is-high .score-pct  { color: var(--accent); }
+.score-pct {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--fg-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* radar */
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.radar-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.5rem;
+  align-self: stretch;
+}
+.radar-svg {
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 1;
+  display: block;
+}
+.radar-grid { fill: none; stroke: var(--line); stroke-width: 1; }
+.radar-axis { stroke: var(--line); stroke-width: 1; }
+.radar-data {
+  fill: var(--accent, var(--fg));
+  fill-opacity: 0.12;
+  stroke: var(--accent, var(--fg));
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill 0.4s, stroke 0.4s;
+}
+.radar-point {
+  fill: var(--accent, var(--fg));
+  transition: fill 0.4s;
+}
+.radar-label-text {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  fill: var(--fg-muted);
+}
+
+/* ── how it works ───────────────────────────────────── */
+.how {
+  margin-top: 3rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.5rem;
+  border-top: 1px solid var(--hairline);
+  padding-top: 2.5rem;
+}
+.how-num {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
+  margin-bottom: 1.25rem;
+}
+.how-title {
+  font-weight: 500;
+  font-size: 1.25rem;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  margin-bottom: 0.75rem;
+}
+.how-body {
+  font-size: 0.9375rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg-soft);
+}
+
+/* ── tiers section: split layout ────────────────────── */
+.tiers-split {
+  margin-top: 3rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: start;
+}
+
+.tiers {
+  border-top: 1px solid var(--line);
+}
+.tier-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+  padding: 1.25rem 0.5rem;
+  border-bottom: 1px solid var(--hairline);
+  transition: background 0.2s;
+}
+.tier-row:hover { background: var(--bg-elev); }
+.tier-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.tier-mark .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tier-mark .code {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+}
+.tier-info {}
+.tier-name {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--fg);
+  margin-bottom: 0.25rem;
+}
+.tier-desc {
+  font-size: 0.8125rem;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--fg-soft);
+}
+
+/* example card */
+.example-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.75rem;
+  position: sticky;
+  top: 90px;
+}
+.example-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 1.25rem;
+}
+.example-tier {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tier-r);
+  color: var(--tier-r);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.example-tier .letter {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+}
+.example-tier .sub {
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.example-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--fg);
+  margin-bottom: 0.3rem;
+}
+.example-desc {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.example-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+}
+.example-cell {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.875rem;
+}
+.example-cell-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.5rem;
+}
+.example-cell-value {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.625rem;
+}
+.example-cell-bar {
+  height: 2px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.example-cell-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.example-cell.cat-sexual    .example-cell-value { color: var(--cat-sexual); }
+.example-cell.cat-sexual    .example-cell-fill  { background: var(--cat-sexual); }
+.example-cell.cat-violence  .example-cell-value { color: var(--cat-violence); }
+.example-cell.cat-violence  .example-cell-fill  { background: var(--cat-violence); }
+.example-cell.cat-substance .example-cell-value { color: var(--cat-substance); }
+.example-cell.cat-substance .example-cell-fill  { background: var(--cat-substance); }
+.example-cell.cat-language  .example-cell-value { color: var(--cat-language); }
+.example-cell.cat-language  .example-cell-fill  { background: var(--cat-language); }
+
+.example-rec {
+  margin-top: 1.25rem;
+  padding: 0.875rem 1rem;
+  background: rgba(158, 63, 63, 0.07);
+  border-radius: 4px;
+}
+[data-theme="dark"] .example-rec { background: rgba(216, 120, 120, 0.10); }
+.example-rec-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tier-r);
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+}
+.example-rec-text {
+  font-size: 0.8125rem;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--fg-soft);
+}
+
+/* ── footer ─────────────────────────────────────────── */
+footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--hairline);
+  padding: 2.5rem 2.5rem 3.5rem;
+}
+.foot-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.foot-mark {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+.foot-meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+}
+
+/* ── motion ─────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
+              transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.reveal.visible { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+
+/* ── responsive ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .nav-inner { padding: 0 1.5rem; }
+  .nav-links { gap: 1.25rem; }
+
+  .hero { padding: 8rem 1.5rem 4rem; }
+  section { padding: 4.5rem 1.5rem; }
+  footer { padding: 2rem 1.5rem 3rem; }
+
+  .hero-strip { grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; max-width: none; }
+
+  .analyzer { grid-template-columns: 1fr; }
+  .result-panel { min-height: auto; }
+  .result-viz { grid-template-columns: 1fr; gap: 2rem; }
+  .radar-svg { max-width: 240px; }
+
+  .how { grid-template-columns: 1fr; gap: 1.5rem; }
+
+  .tiers-split { grid-template-columns: 1fr; gap: 2.5rem; }
+  .example-card { position: static; }
+}
+
+@media (max-width: 560px) {
+  .hero-strip { grid-template-columns: 1fr 1fr; }
+  .hero-strip > div:nth-child(3) { grid-column: 1 / -1; }
+  .nav-links { gap: 0.75rem; }
+  .nav-link { font-size: 0.75rem; }
+  .result-head { grid-template-columns: 1fr; gap: 1rem; }
+  .score-row { grid-template-columns: 70px 1fr 38px; gap: 0.5rem; }
 }
 </style>
 </head>
 <body>
 
-<!-- NAV -->
+<!-- nav -->
 <nav>
   <div class="nav-inner">
-    <span class="nav-logo">LyricCert</span>
+    <a href="#" class="nav-mark">LyricCert<span class="dot"></span></a>
     <div class="nav-links">
-      <button class="nav-btn" onclick="document.getElementById('demo').scrollIntoView({behavior:'smooth'})" style="color: var(--green); font-weight: 500;">Try Demo</button>
-      <button class="nav-btn" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">How it works</button>
+      <a class="nav-link" href="#analyze">Analyze</a>
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#tiers">Ratings</a>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </button>
     </div>
   </div>
 </nav>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-eyebrow">Content Rating System</div>
-  <h1 class="hero-title">Rate any lyric, <em>instantly.</em></h1>
-  <p class="hero-subtitle">A fine-tuned Longformer model classifies song lyrics across four content dimensions and maps the results to a structured five-tier rating system.</p>
-  <div class="hero-cta">
-    <button class="btn-primary" onclick="document.getElementById('demo').scrollIntoView({behavior:'smooth'})">Analyze lyrics</button>
-    <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">How it works</button>
-  </div>
-  <div class="hero-demo">
-    <div class="demo-card">
-      <div class="demo-badge" style="background: var(--green-pale);">
-        <span class="demo-badge-label" style="color: var(--green);">M-E</span>
-        <span class="demo-badge-sub" style="color: var(--green);">Everyone</span>
-      </div>
-      <div class="demo-info">
-        <div class="demo-song">Sample Track</div>
-        <div class="demo-artist">Example Artist · 2024</div>
-        <div class="demo-tags">
-          <span class="demo-tag" style="color: var(--green); border-color: rgba(26,138,92,0.2); background: var(--green-pale);">✓ Kid Safe</span>
-          <span class="demo-tag" style="color: var(--ink-muted); border-color: var(--line);">No content warnings</span>
-        </div>
-      </div>
-      <div class="demo-bars">
-        <div class="demo-bar-row">
-          <div class="demo-bar-header"><span>Sexual</span><span>4%</span></div>
-          <div class="demo-bar-track"><div class="demo-bar-fill" style="width:4%; background:var(--red);"></div></div>
-        </div>
-        <div class="demo-bar-row">
-          <div class="demo-bar-header"><span>Violence</span><span>8%</span></div>
-          <div class="demo-bar-track"><div class="demo-bar-fill" style="width:8%; background:var(--amber);"></div></div>
-        </div>
-        <div class="demo-bar-row">
-          <div class="demo-bar-header"><span>Substance</span><span>3%</span></div>
-          <div class="demo-bar-track"><div class="demo-bar-fill" style="width:3%; background:var(--purple);"></div></div>
-        </div>
-        <div class="demo-bar-row">
-          <div class="demo-bar-header"><span>Language</span><span>6%</span></div>
-          <div class="demo-bar-track"><div class="demo-bar-fill" style="width:6%; background:var(--blue);"></div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+<!-- hero -->
+<main>
+<header class="hero">
+  <div class="hero-meta">A content rating system for song lyrics</div>
+  <h1 class="hero-title">Know what's in the music.</h1>
+  <p class="hero-sub">
+    An instant content rating for any song. Four dimensions, five audience tiers, similar to the rating systems used for film and games.
+  </p>
 
-<!-- TRY IT -->
-<section class="section" id="demo" style="background: var(--white); border-top: 1px solid var(--line);">
-  <div class="section-inner">
-    <div class="reveal">
-      <div class="section-label">Try it</div>
-      <h2 class="section-title">Analyze a song.</h2>
-      <p class="section-body">Paste any song lyrics below. The model returns content scores across four categories and assigns a rating.</p>
+  <div class="hero-strip">
+    <div>
+      <div class="strip-num tabular">4</div>
+      <div class="strip-label">Content axes</div>
     </div>
-    <div class="demo-layout reveal" style="margin-top: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
-      <!-- INPUT -->
-      <div>
-        <div style="background: var(--surface); border: 1px solid var(--line-strong); border-radius: 20px; overflow: hidden;">
-          <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 0.8rem; font-weight: 500; color: var(--ink-muted); letter-spacing: 0.06em; text-transform: uppercase;">Lyrics</span>
-            <span id="word-count" style="font-size: 0.75rem; color: var(--ink-ghost);">0 words</span>
-          </div>
-          <textarea id="lyrics-input" placeholder="Paste song lyrics here…"
-            style="width: 100%; height: 320px; padding: 1.25rem 1.5rem; border: none; background: transparent; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 300; color: var(--ink); line-height: 1.7; resize: none; outline: none;"></textarea>
-          <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--line); display: flex; gap: 0.75rem;">
-            <button onclick="analyzeLyrics()" style="flex: 1; background: var(--ink); color: #fff; border: none; border-radius: 100px; padding: 0.75rem 1.5rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s;">Analyze</button>
-            <button onclick="clearAll()" style="background: transparent; color: var(--ink-muted); border: 1px solid var(--line-strong); border-radius: 100px; padding: 0.75rem 1.25rem; font-family: 'DM Sans', sans-serif; font-size: 0.875rem; cursor: pointer;">Clear</button>
-          </div>
-        </div>
+    <div>
+      <div class="strip-num tabular">5</div>
+      <div class="strip-label">Rating tiers</div>
+    </div>
+    <div>
+      <div class="strip-num tabular">2K</div>
+      <div class="strip-label">Words per song</div>
+    </div>
+  </div>
+</header>
+
+<!-- analyzer -->
+<section id="analyze">
+  <div class="reveal">
+    <div class="section-eyebrow">Analyzer</div>
+    <h2 class="section-title">Paste a song. Get its rating.</h2>
+    <p class="section-lede">Drop in any lyrics. The system returns a score for each of the four content dimensions and assigns a single audience tier.</p>
+  </div>
+
+  <div class="analyzer reveal">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="label">Lyrics</span>
+        <span id="word-count" class="meta">0 words</span>
       </div>
-      <!-- RESULT -->
-      <div id="result-panel">
-        <div id="empty-state" style="min-height: 420px; border: 1px dashed var(--line-strong); border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ink-ghost)" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <textarea id="lyrics-input" placeholder="Paste the full text of a song here…" spellcheck="false"></textarea>
+      <div class="panel-foot">
+        <button id="analyze-btn" class="btn btn-primary" onclick="analyzeLyrics()">Analyze</button>
+        <button class="btn btn-clear" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel result-panel">
+      <div class="panel-head">
+        <span class="label">Rating</span>
+        <span id="result-meta" class="meta"></span>
+      </div>
+
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">∅</div>
+        <p>Awaiting lyrics.</p>
+      </div>
+
+      <div id="loading-state" class="loading-state">
+        <div class="spinner"></div>
+        <p style="font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted);">Analyzing</p>
+      </div>
+
+      <div id="result-content" class="result-content">
+        <div class="result-head">
+          <div id="result-tier" class="result-tier" style="color: var(--fg);">
+            <span class="tier-letter" id="tier-letter">M-E</span>
+            <span class="tier-sub" id="tier-sub">Everyone</span>
           </div>
-          <p style="font-size: 0.875rem; color: var(--ink-ghost); font-weight: 300;">Results will appear here</p>
+          <div>
+            <div id="result-name" class="result-name">Everyone</div>
+            <div id="result-flag" class="result-flag">
+              <span class="dot" style="background: var(--tier-e);"></span>
+              <span id="flag-text">Kid safe</span>
+            </div>
+          </div>
         </div>
-        <div id="result-content" style="display: none;">
-          <div style="background: var(--white); border: 1px solid var(--line-strong); border-radius: 20px; padding: 1.75rem; margin-bottom: 1rem;">
-            <div style="display: flex; align-items: center; gap: 1.25rem; margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line);">
-              <div id="res-badge" style="width: 70px; height: 70px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;">
-                <span id="res-badge-label" style="font-family: 'DM Serif Display', serif; font-size: 1.1rem; line-height: 1;"></span>
-                <span id="res-badge-sub" style="font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; font-weight: 500;"></span>
-              </div>
-              <div>
-                <div id="res-rating-name" style="font-size: 1.1rem; font-weight: 500; margin-bottom: 4px;"></div>
-                <div id="res-safe-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.25rem 0.75rem; border-radius: 100px; border: 1.5px solid;"></div>
-              </div>
+
+        <p id="result-explanation" class="result-explanation"></p>
+
+        <div id="result-tags" class="result-tags"></div>
+
+        <div class="result-viz">
+          <div class="result-scores">
+            <div class="result-scores-label">Scores</div>
+            <div class="score-row" data-key="sexual">
+              <span class="score-name">Sexual</span>
+              <div class="score-track"><div class="score-fill"></div></div>
+              <span class="score-pct">0%</span>
             </div>
-            <p id="res-explanation" style="font-size: 0.85rem; color: var(--ink-soft); line-height: 1.6; font-weight: 300; margin-bottom: 1rem;"></p>
-            <div id="res-tags" style="display: flex; flex-wrap: wrap; gap: 0.4rem;"></div>
-          </div>
-          <div style="background: var(--white); border: 1px solid var(--line-strong); border-radius: 20px; padding: 1.5rem; margin-bottom: 1rem;">
-            <div style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 1.25rem;">Content Scores</div>
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-              <div class="score-row" data-key="sexual">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="font-size: 0.8rem; font-weight: 500;">Sexual</span><span class="score-pct" style="font-size: 0.8rem; color: var(--ink-muted);">0%</span></div>
-                <div style="height: 5px; background: var(--line); border-radius: 100px; overflow: hidden;"><div class="score-fill" style="height: 100%; width: 0%; border-radius: 100px; background: var(--red); transition: width 0.8s cubic-bezier(0.16,1,0.3,1);"></div></div>
-              </div>
-              <div class="score-row" data-key="violence">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="font-size: 0.8rem; font-weight: 500;">Violence</span><span class="score-pct" style="font-size: 0.8rem; color: var(--ink-muted);">0%</span></div>
-                <div style="height: 5px; background: var(--line); border-radius: 100px; overflow: hidden;"><div class="score-fill" style="height: 100%; width: 0%; border-radius: 100px; background: var(--amber); transition: width 0.8s cubic-bezier(0.16,1,0.3,1);"></div></div>
-              </div>
-              <div class="score-row" data-key="substance">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="font-size: 0.8rem; font-weight: 500;">Substance</span><span class="score-pct" style="font-size: 0.8rem; color: var(--ink-muted);">0%</span></div>
-                <div style="height: 5px; background: var(--line); border-radius: 100px; overflow: hidden;"><div class="score-fill" style="height: 100%; width: 0%; border-radius: 100px; background: var(--purple); transition: width 0.8s cubic-bezier(0.16,1,0.3,1);"></div></div>
-              </div>
-              <div class="score-row" data-key="language">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span style="font-size: 0.8rem; font-weight: 500;">Language</span><span class="score-pct" style="font-size: 0.8rem; color: var(--ink-muted);">0%</span></div>
-                <div style="height: 5px; background: var(--line); border-radius: 100px; overflow: hidden;"><div class="score-fill" style="height: 100%; width: 0%; border-radius: 100px; background: var(--blue); transition: width 0.8s cubic-bezier(0.16,1,0.3,1);"></div></div>
-              </div>
+            <div class="score-row" data-key="violence">
+              <span class="score-name">Violence</span>
+              <div class="score-track"><div class="score-fill"></div></div>
+              <span class="score-pct">0%</span>
+            </div>
+            <div class="score-row" data-key="substance">
+              <span class="score-name">Substance</span>
+              <div class="score-track"><div class="score-fill"></div></div>
+              <span class="score-pct">0%</span>
+            </div>
+            <div class="score-row" data-key="language">
+              <span class="score-name">Language</span>
+              <div class="score-track"><div class="score-fill"></div></div>
+              <span class="score-pct">0%</span>
             </div>
           </div>
-          <div style="background: var(--white); border: 1px solid var(--line-strong); border-radius: 20px; padding: 1.5rem;">
-            <div style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 0.5rem;">Radar</div>
-            <svg id="radar-chart" viewBox="0 0 260 240" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:300px; display:block; margin:0 auto;">
-              <polygon id="grid3" fill="none" stroke="#e8e8e8" stroke-width="1"/>
-              <polygon id="grid2" fill="none" stroke="#e8e8e8" stroke-width="1"/>
-              <polygon id="grid1" fill="none" stroke="#e8e8e8" stroke-width="1"/>
-              <line id="ax0" stroke="#e8e8e8" stroke-width="1"/>
-              <line id="ax1" stroke="#e8e8e8" stroke-width="1"/>
-              <line id="ax2" stroke="#e8e8e8" stroke-width="1"/>
-              <line id="ax3" stroke="#e8e8e8" stroke-width="1"/>
-              <polygon id="radar-data" fill="rgba(26,138,92,0.12)" stroke="#1a8a5c" stroke-width="2" stroke-linejoin="round"/>
-              <circle id="rp0" r="4" fill="#1a8a5c"/>
-              <circle id="rp1" r="4" fill="#1a8a5c"/>
-              <circle id="rp2" r="4" fill="#1a8a5c"/>
-              <circle id="rp3" r="4" fill="#1a8a5c"/>
-              <text id="rl0" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="#888">Sexual</text>
-              <text id="rl1" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="#888">Violence</text>
-              <text id="rl2" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="#888">Substance</text>
-              <text id="rl3" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="11" fill="#888">Language</text>
+
+          <div class="radar-wrap">
+            <div class="radar-label">Distribution</div>
+            <svg class="radar-svg" id="radar-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <!-- grid rings -->
+              <polygon class="radar-grid" id="grid-3"/>
+              <polygon class="radar-grid" id="grid-2"/>
+              <polygon class="radar-grid" id="grid-1"/>
+              <!-- axes -->
+              <line class="radar-axis" id="ax-0"/>
+              <line class="radar-axis" id="ax-1"/>
+              <line class="radar-axis" id="ax-2"/>
+              <line class="radar-axis" id="ax-3"/>
+              <!-- data polygon -->
+              <polygon class="radar-data" id="radar-data"/>
+              <!-- points -->
+              <circle class="radar-point" id="rp-0" r="2.5"/>
+              <circle class="radar-point" id="rp-1" r="2.5"/>
+              <circle class="radar-point" id="rp-2" r="2.5"/>
+              <circle class="radar-point" id="rp-3" r="2.5"/>
+              <!-- labels -->
+              <text class="radar-label-text" id="rl-0" text-anchor="middle">SEX</text>
+              <text class="radar-label-text" id="rl-1" text-anchor="middle">VIO</text>
+              <text class="radar-label-text" id="rl-2" text-anchor="middle">SUB</text>
+              <text class="radar-label-text" id="rl-3" text-anchor="middle">LANG</text>
             </svg>
           </div>
         </div>
-        <div id="loading-state" style="display: none; min-height: 420px; border: 1px solid var(--line); border-radius: 20px; align-items: center; justify-content: center; flex-direction: column; gap: 1rem;">
-          <div class="spinner"></div>
-          <p style="font-size: 0.875rem; color: var(--ink-muted); font-weight: 300;">Running inference…</p>
-        </div>
       </div>
     </div>
   </div>
 </section>
 
-<hr class="rule">
+<!-- how it works -->
+<section id="how">
+  <div class="reveal">
+    <div class="section-eyebrow">How it works</div>
+    <h2 class="section-title">Three steps. No setup.</h2>
+    <p class="section-lede">From raw lyrics to a finished rating in one click.</p>
+  </div>
 
-<!-- HOW IT WORKS + RATINGS + OUTPUT (merged) -->
-<section class="section" id="how">
-  <div class="section-inner">
-    <div class="reveal">
-      <div class="section-label">Process</div>
-      <h2 class="section-title">How it works.</h2>
-      <p class="section-body">Three stages from raw text to a structured content rating.</p>
+  <div class="how reveal">
+    <div>
+      <div class="how-num">01 · Paste</div>
+      <h3 class="how-title">Drop in any lyrics.</h3>
+      <p class="how-body">Copy the words from any song, whether the full track or a single verse, and paste them into the analyzer. No accounts, no audio uploads.</p>
     </div>
-
-    <div class="how-grid reveal">
-      <div class="how-step">
-        <div class="how-num">01</div>
-        <div class="how-step-title">Preprocessing</div>
-        <div class="how-step-body">Input lyrics are lowercased, contraction-expanded, tokenized and WordNet-lemmatized. Non-alphabetic tokens are removed before encoding.</div>
-      </div>
-      <div class="how-step">
-        <div class="how-num">02</div>
-        <div class="how-step-title">Longformer Inference</div>
-        <div class="how-step-body">A fine-tuned Longformer processes up to 2,048 tokens. The CLS token receives global attention; mean pooling feeds a linear classification head with four sigmoid outputs.</div>
-      </div>
-      <div class="how-step">
-        <div class="how-num">03</div>
-        <div class="how-step-title">Rating Assignment</div>
-        <div class="how-step-body">Raw probabilities are passed through calibrated thresholds to assign one of five MCR tiers (M-E to M-AO) and generate content descriptors.</div>
-      </div>
+    <div>
+      <div class="how-num">02 · Analyze</div>
+      <h3 class="how-title">The model reads through.</h3>
+      <p class="how-body">A long-context language model scores the song across four content dimensions: sexual, violence, substance, and language.</p>
     </div>
-
-    <!-- Rating system + Model output -->
-    <div class="how-bottom-grid reveal" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 5rem;">
-
-      <div>
-        <div class="section-label">Rating system</div>
-        <div class="ratings-list" style="margin-top: 1.25rem;">
-          <div class="rating-row">
-            <div class="rating-pill" style="background:var(--green-pale); color:var(--green);">M-E</div>
-            <div><div class="rating-row-name">Everyone</div><div class="rating-row-desc">No significant content detected across all four categories.</div></div>
-          </div>
-          <div class="rating-row">
-            <div class="rating-pill" style="background:var(--blue-pale); color:var(--blue);">M-P</div>
-            <div><div class="rating-row-name">Parental Guidance</div><div class="rating-row-desc">Minor thematic content present. Suitable for most audiences.</div></div>
-          </div>
-          <div class="rating-row">
-            <div class="rating-pill" style="background:var(--amber-pale); color:var(--amber);">M-T</div>
-            <div><div class="rating-row-name">Teen Audiences</div><div class="rating-row-desc">Moderate scores in one or more categories. Teen audiences and above.</div></div>
-          </div>
-          <div class="rating-row">
-            <div class="rating-pill" style="background:var(--red-pale); color:var(--red);">M-R</div>
-            <div><div class="rating-row-name">Restricted</div><div class="rating-row-desc">High scores in one or more categories. Not recommended for minors.</div></div>
-          </div>
-          <div class="rating-row">
-            <div class="rating-pill" style="background:var(--purple-pale); color:var(--purple);">M-AO</div>
-            <div><div class="rating-row-name">Adults Only</div><div class="rating-row-desc">Explicit content detected across multiple categories. Adults only.</div></div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="section-label">Model output</div>
-        <div class="stat-row" style="margin-top: 1.25rem; margin-bottom: 2.5rem;">
-          <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">Content categories</div></div>
-          <div class="stat-item"><div class="stat-num">5</div><div class="stat-label">Rating tiers</div></div>
-          <div class="stat-item"><div class="stat-num">2K</div><div class="stat-label">Token capacity</div></div>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem;">
-          <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.825rem; color: var(--ink-soft);">
-            <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--green-pale); border: 1px solid rgba(26,138,92,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-              <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" fill="none" stroke="var(--green)" stroke-width="1.5"/></svg>
-            </div>
-            Four independent sigmoid outputs, categories can co-occur
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.825rem; color: var(--ink-soft);">
-            <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--green-pale); border: 1px solid rgba(26,138,92,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-              <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" fill="none" stroke="var(--green)" stroke-width="1.5"/></svg>
-            </div>
-            Per-category thresholds tuned on validation set
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.825rem; color: var(--ink-soft);">
-            <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--green-pale); border: 1px solid rgba(26,138,92,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-              <svg width="9" height="9" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" fill="none" stroke="var(--green)" stroke-width="1.5"/></svg>
-            </div>
-            WordNet lemmatization applied before tokenization
-          </div>
-        </div>
-        <div class="ratings-example-card">
-          <div class="rec-card-header">
-            <div class="rec-badge-large" style="background:var(--red-pale);">
-              <span class="label" style="color:var(--red);">M-R</span>
-              <span class="sub" style="color:var(--red);">Restricted</span>
-            </div>
-            <div>
-              <div class="rec-title">High-scoring example</div>
-              <div class="rec-subtitle">Strong language · Violence references · Substance use</div>
-            </div>
-          </div>
-          <div class="content-score-grid">
-            <div class="score-item"><div class="score-item-label">Sexual</div><div class="score-item-value" style="color:var(--red);">38%</div><div class="score-item-bar"><div class="score-item-fill" style="width:38%; background:var(--red);"></div></div></div>
-            <div class="score-item"><div class="score-item-label">Violence</div><div class="score-item-value" style="color:var(--amber);">72%</div><div class="score-item-bar"><div class="score-item-fill" style="width:72%; background:var(--amber);"></div></div></div>
-            <div class="score-item"><div class="score-item-label">Substance</div><div class="score-item-value" style="color:var(--purple);">55%</div><div class="score-item-bar"><div class="score-item-fill" style="width:55%; background:var(--purple);"></div></div></div>
-            <div class="score-item"><div class="score-item-label">Language</div><div class="score-item-value" style="color:var(--blue);">81%</div><div class="score-item-bar"><div class="score-item-fill" style="width:81%; background:var(--blue);"></div></div></div>
-          </div>
-        </div>
-      </div>
-
+    <div>
+      <div class="how-num">03 · Rate</div>
+      <h3 class="how-title">Get a clear verdict.</h3>
+      <p class="how-body">The four scores collapse into one of five audience tiers, plus content warnings for any categories that scored high.</p>
     </div>
   </div>
 </section>
 
-<!-- FOOTER -->
+<!-- tiers -->
+<section id="tiers">
+  <div class="reveal">
+    <div class="section-eyebrow">The rating system</div>
+    <h2 class="section-title">Five tiers, plainly stated.</h2>
+    <p class="section-lede">Clear audience tiers and content descriptors, adapted from the rating systems used for film and games.</p>
+  </div>
+
+  <div class="tiers-split reveal">
+    <div class="tiers">
+      <div class="tier-row">
+        <div class="tier-mark">
+          <span class="dot" style="background: var(--tier-e);"></span>
+          <span class="code" style="color: var(--tier-e);">M-E</span>
+        </div>
+        <div class="tier-info">
+          <div class="tier-name">Everyone</div>
+          <div class="tier-desc">No significant content detected. Safe for all audiences.</div>
+        </div>
+      </div>
+
+      <div class="tier-row">
+        <div class="tier-mark">
+          <span class="dot" style="background: var(--tier-p);"></span>
+          <span class="code" style="color: var(--tier-p);">M-P</span>
+        </div>
+        <div class="tier-info">
+          <div class="tier-name">Parental Guidance</div>
+          <div class="tier-desc">Minor thematic content. Suitable for most audiences.</div>
+        </div>
+      </div>
+
+      <div class="tier-row">
+        <div class="tier-mark">
+          <span class="dot" style="background: var(--tier-t);"></span>
+          <span class="code" style="color: var(--tier-t);">M-T</span>
+        </div>
+        <div class="tier-info">
+          <div class="tier-name">Teen Audiences</div>
+          <div class="tier-desc">Moderate content in one or more categories. Teens and above.</div>
+        </div>
+      </div>
+
+      <div class="tier-row">
+        <div class="tier-mark">
+          <span class="dot" style="background: var(--tier-r);"></span>
+          <span class="code" style="color: var(--tier-r);">M-R</span>
+        </div>
+        <div class="tier-info">
+          <div class="tier-name">Restricted</div>
+          <div class="tier-desc">High scores in one or more categories. Not recommended for minors.</div>
+        </div>
+      </div>
+
+      <div class="tier-row" style="border-bottom: none;">
+        <div class="tier-mark">
+          <span class="dot" style="background: var(--tier-ao);"></span>
+          <span class="code" style="color: var(--tier-ao);">M-AO</span>
+        </div>
+        <div class="tier-info">
+          <div class="tier-name">Adults Only</div>
+          <div class="tier-desc">Explicit content across multiple categories. Adults only.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- example card -->
+    <div class="example-card">
+      <div class="example-head">
+        <div class="example-tier">
+          <span class="letter">M-R</span>
+          <span class="sub">Restricted</span>
+        </div>
+        <div>
+          <div class="example-title">High-scoring example</div>
+          <div class="example-desc">Strong language · Violence references · Substance use</div>
+        </div>
+      </div>
+
+      <div class="example-grid">
+        <div class="example-cell cat-sexual">
+          <div class="example-cell-label">Sexual</div>
+          <div class="example-cell-value">38%</div>
+          <div class="example-cell-bar"><div class="example-cell-fill" style="width: 38%;"></div></div>
+        </div>
+        <div class="example-cell cat-violence">
+          <div class="example-cell-label">Violence</div>
+          <div class="example-cell-value">72%</div>
+          <div class="example-cell-bar"><div class="example-cell-fill" style="width: 72%;"></div></div>
+        </div>
+        <div class="example-cell cat-substance">
+          <div class="example-cell-label">Substance</div>
+          <div class="example-cell-value">55%</div>
+          <div class="example-cell-bar"><div class="example-cell-fill" style="width: 55%;"></div></div>
+        </div>
+        <div class="example-cell cat-language">
+          <div class="example-cell-label">Language</div>
+          <div class="example-cell-value">81%</div>
+          <div class="example-cell-bar"><div class="example-cell-fill" style="width: 81%;"></div></div>
+        </div>
+      </div>
+
+      <div class="example-rec">
+        <div class="example-rec-label">Recommendation</div>
+        <div class="example-rec-text">Strong scores across violence, language, and substance categories. Parental discretion strongly advised.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- footer -->
+</main>
+
 <footer>
-  <div class="footer-inner">
-    <span class="footer-logo">LyricCert</span>
-    <p class="footer-copy">LyricCert · 2026</p>
+  <div class="foot-inner">
+    <div class="foot-mark">LyricCert</div>
+    <div class="foot-meta">© 2026</div>
   </div>
 </footer>
 
 <script>
+const root = document.documentElement;
+const themeToggle = document.getElementById('theme-toggle');
+
+function applyTheme(theme) {
+  root.setAttribute('data-theme', theme);
+  try { localStorage.setItem('lc-theme', theme); } catch (e) {}
+}
+
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('lc-theme'); } catch (e) {}
+  if (saved === 'dark' || saved === 'light') {
+    applyTheme(saved);
+  } else {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
+})();
+
+themeToggle.addEventListener('click', () => {
+  const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+});
+
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.12 });
+}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-document.getElementById('lyrics-input').addEventListener('input', function() {
-  const words = this.value.trim() ? this.value.trim().split(/\s+/).length : 0;
-  document.getElementById('word-count').textContent = words + ' word' + (words !== 1 ? 's' : '');
+const lyricsInput = document.getElementById('lyrics-input');
+const wordCount = document.getElementById('word-count');
+lyricsInput.addEventListener('input', () => {
+  const v = lyricsInput.value.trim();
+  const n = v ? v.split(/\s+/).length : 0;
+  wordCount.textContent = `${n} word${n === 1 ? '' : 's'}`;
 });
 
 function clearAll() {
-  document.getElementById('lyrics-input').value = '';
-  document.getElementById('word-count').textContent = '0 words';
+  lyricsInput.value = '';
+  wordCount.textContent = '0 words';
+  document.getElementById('result-meta').textContent = '';
   document.getElementById('empty-state').style.display = 'flex';
-  document.getElementById('result-content').style.display = 'none';
   document.getElementById('loading-state').style.display = 'none';
+  document.getElementById('result-content').style.display = 'none';
 }
 
-const API_URL = 'http://localhost:8000/analyze';
-
-const RATING_META = {
-  'M-E':  { name: 'Everyone',          color: 'var(--green)',  pale: 'var(--green-pale)',  safe: true  },
-  'M-P':  { name: 'Parental Guidance', color: 'var(--blue)',   pale: 'var(--blue-pale)',   safe: true  },
-  'M-T':  { name: 'Teen Audiences',    color: 'var(--amber)',  pale: 'var(--amber-pale)',  safe: false },
-  'M-R':  { name: 'Restricted',        color: 'var(--red)',    pale: 'var(--red-pale)',    safe: false },
-  'M-AO': { name: 'Adults Only',       color: 'var(--purple)', pale: 'var(--purple-pale)', safe: false },
+const TIER_META = {
+  'M-E':  { name: 'Everyone',          var: '--tier-e',  flag: 'Kid safe' },
+  'M-P':  { name: 'Parental Guidance', var: '--tier-p',  flag: 'Kid safe' },
+  'M-T':  { name: 'Teen',              var: '--tier-t',  flag: 'Not for children' },
+  'M-R':  { name: 'Restricted',        var: '--tier-r',  flag: 'Parental discretion' },
+  'M-AO': { name: 'Adults Only',       var: '--tier-ao', flag: 'Adults only' },
 };
 
-function renderResult(data) {
-  const meta = RATING_META[data.mcr_rating] || RATING_META['M-E'];
-  document.getElementById('res-badge').style.background = meta.pale;
-  document.getElementById('res-badge-label').style.color = meta.color;
-  document.getElementById('res-badge-label').textContent = data.mcr_rating;
-  document.getElementById('res-badge-sub').style.color = meta.color;
-  document.getElementById('res-badge-sub').textContent = meta.name.split(' ')[0];
-  document.getElementById('res-rating-name').textContent = meta.name;
+// ─── radar chart ─────────────────────────────────────
+const RADAR = {
+  cx: 100, cy: 100, R: 70,
+  // 4 axes: top, right, bottom, left
+  // matches keys: sexual, violence, substance, language
+  angles: [-90, 0, 90, 180]
+};
 
-  const safeBadge = document.getElementById('res-safe-badge');
-  if (data.kid_safe) {
-    safeBadge.textContent = '✓ Kid Safe';
-    safeBadge.style.color = 'var(--green)';
-    safeBadge.style.background = 'var(--green-pale)';
-    safeBadge.style.borderColor = 'rgba(26,138,92,0.3)';
-  } else {
-    safeBadge.textContent = '⚠ Not Kid Safe';
-    safeBadge.style.color = 'var(--red)';
-    safeBadge.style.background = 'var(--red-pale)';
-    safeBadge.style.borderColor = 'rgba(176,32,32,0.3)';
-  }
-
-  document.getElementById('res-explanation').textContent = data.mcr_explanation;
-
-  const tagsEl = document.getElementById('res-tags');
-  tagsEl.innerHTML = data.mcr_descriptors && data.mcr_descriptors.length
-    ? data.mcr_descriptors.map(d => `<span style="font-size:0.75rem;font-weight:500;padding:0.25rem 0.75rem;border-radius:100px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);">${d}</span>`).join('')
-    : '<span style="font-size:0.8rem;color:var(--ink-ghost);font-weight:300;">No content warnings</span>';
-
-  const keyMap = { sexual: data.sexual, violence: data.violence, substance: data.substance, language: data.language };
-  document.querySelectorAll('.score-row').forEach(row => {
-    const val = keyMap[row.dataset.key] || 0;
-    const pct = Math.round(val * 100);
-    row.querySelector('.score-pct').textContent = pct + '%';
-    setTimeout(() => { row.querySelector('.score-fill').style.width = pct + '%'; }, 50);
-  });
-
-  document.getElementById('loading-state').style.display = 'none';
-  document.getElementById('result-content').style.display = 'block';
-  drawRadar(data.sexual, data.violence, data.substance, data.language);
+function radarPoint(angleDeg, r) {
+  const rad = angleDeg * Math.PI / 180;
+  return [RADAR.cx + r * Math.cos(rad), RADAR.cy + r * Math.sin(rad)];
 }
 
-function drawRadar(sexual, violence, substance, language) {
-  const cx = 130, cy = 120, R = 90;
-  const angles = [-90, 0, 90, 180];
-  const values = [sexual, violence, substance, language];
-  const labels = ['Sexual', 'Violence', 'Substance', 'Language'];
-  const labelOffset = 18;
-
-  function pt(angle, r) {
-    const rad = angle * Math.PI / 180;
-    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
-  }
-
-  [1, 0.75, 0.5, 0.25].forEach((scale, i) => {
-    const el = document.getElementById('grid' + (i + 1));
-    if (!el) return;
-    el.setAttribute('points', angles.map(a => pt(a, R * scale).join(',')).join(' '));
+function initRadarGrid() {
+  // grid rings at 33%, 66%, 100%
+  [1, 0.66, 0.33].forEach((scale, i) => {
+    const el = document.getElementById(`grid-${3 - i}`);
+    const pts = RADAR.angles.map(a => radarPoint(a, RADAR.R * scale).join(',')).join(' ');
+    el.setAttribute('points', pts);
   });
-
-  angles.forEach((angle, i) => {
-    const el = document.getElementById('ax' + i);
-    if (!el) return;
-    const [x2, y2] = pt(angle, R);
-    el.setAttribute('x1', cx); el.setAttribute('y1', cy);
+  // axes
+  RADAR.angles.forEach((a, i) => {
+    const el = document.getElementById(`ax-${i}`);
+    const [x2, y2] = radarPoint(a, RADAR.R);
+    el.setAttribute('x1', RADAR.cx); el.setAttribute('y1', RADAR.cy);
     el.setAttribute('x2', x2); el.setAttribute('y2', y2);
   });
-
-  document.getElementById('radar-data').setAttribute('points',
-    angles.map((angle, i) => pt(angle, R * values[i]).join(',')).join(' '));
-
-  angles.forEach((angle, i) => {
-    const [dx, dy] = pt(angle, R * values[i]);
-    const rp = document.getElementById('rp' + i);
-    if (rp) { rp.setAttribute('cx', dx); rp.setAttribute('cy', dy); }
-    const [lx, ly] = pt(angle, R + labelOffset);
-    const rl = document.getElementById('rl' + i);
-    if (rl) { rl.setAttribute('x', lx); rl.setAttribute('y', ly + 4); rl.textContent = labels[i]; }
+  // labels: outside the grid
+  const labelOffset = 14;
+  RADAR.angles.forEach((a, i) => {
+    const [lx, ly] = radarPoint(a, RADAR.R + labelOffset);
+    const el = document.getElementById(`rl-${i}`);
+    el.setAttribute('x', lx);
+    el.setAttribute('y', ly + 3);
   });
 }
+initRadarGrid();
+
+function drawRadar(scores, color) {
+  const values = [scores.sexual, scores.violence, scores.substance, scores.language];
+  // data polygon
+  const dataPts = RADAR.angles.map((a, i) => radarPoint(a, RADAR.R * values[i]).join(',')).join(' ');
+  document.getElementById('radar-data').setAttribute('points', dataPts);
+  // points
+  RADAR.angles.forEach((a, i) => {
+    const [x, y] = radarPoint(a, RADAR.R * values[i]);
+    const el = document.getElementById(`rp-${i}`);
+    el.setAttribute('cx', x);
+    el.setAttribute('cy', y);
+  });
+  // colour
+  document.getElementById('radar-svg').style.setProperty('--accent', color);
+}
+
+// ─── render result ───────────────────────────────────
+function renderResult(data) {
+  const meta = TIER_META[data.mcr_rating] || TIER_META['M-E'];
+  const color = `var(${meta.var})`;
+
+  const tierEl = document.getElementById('result-tier');
+  tierEl.style.color = color;
+  document.getElementById('tier-letter').textContent = data.mcr_rating;
+  document.getElementById('tier-sub').textContent = meta.name.split(' ')[0];
+
+  document.getElementById('result-name').innerHTML =
+    `${meta.name}<span class="code">${data.mcr_rating}</span>`;
+
+  const flagEl = document.getElementById('result-flag');
+  flagEl.querySelector('.dot').style.background = color;
+  document.getElementById('flag-text').textContent = meta.flag;
+
+  document.getElementById('result-explanation').textContent =
+    [data.mcr_explanation, data.mcr_recommendation].filter(Boolean).join(' ');
+
+  const tagsEl = document.getElementById('result-tags');
+  if (data.mcr_descriptors && data.mcr_descriptors.length) {
+    tagsEl.innerHTML = data.mcr_descriptors.map(d => `<span class="result-tag">${d}</span>`).join('');
+  } else {
+    tagsEl.innerHTML = `<span class="result-tag empty">No content warnings</span>`;
+  }
+
+  const scores = {
+    sexual:    data.sexual    || 0,
+    violence:  data.violence  || 0,
+    substance: data.substance || 0,
+    language:  data.language  || 0
+  };
+  const maxKey = Object.keys(scores).reduce((a, b) => scores[a] >= scores[b] ? a : b);
+
+  document.querySelectorAll('.score-row').forEach(row => {
+    const key = row.dataset.key;
+    const val = scores[key] || 0;
+    const pct = Math.round(val * 100);
+    row.querySelector('.score-pct').textContent = `${pct}%`;
+    row.classList.toggle('is-high', key === maxKey && val > 0.05);
+    row.style.setProperty('--accent', color);
+    row.querySelector('.score-fill').style.right = `${100 - pct}%`;
+  });
+
+  // radar
+  drawRadar(scores, color);
+
+  document.getElementById('result-meta').textContent =
+    `${data.total_words || 0} words · ${data.mcr_rating}`;
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('loading-state').style.display = 'none';
+  document.getElementById('result-content').style.display = 'flex';
+}
+
+function showError(msg) {
+  document.getElementById('loading-state').style.display = 'none';
+  document.getElementById('result-content').style.display = 'none';
+  document.getElementById('result-meta').textContent = '';
+  const empty = document.getElementById('empty-state');
+  empty.style.display = 'flex';
+  empty.innerHTML = `
+    <div class="empty-icon" style="color: var(--tier-r);">!</div>
+    <p style="text-align:center; max-width: 280px; line-height:1.5;">${msg}</p>
+    <p style="font-family: var(--mono); font-size: 0.7rem; color: var(--fg-faint); margin-top: 0.5rem;">
+      uvicorn api:app --port 8000
+    </p>
+  `;
+}
+
+const API_URL = document.querySelector('meta[name="lc-api-url"]')?.content
+              || 'http://localhost:8000/analyze';
 
 async function analyzeLyrics() {
-  const lyrics = document.getElementById('lyrics-input').value.trim();
+  const lyrics = lyricsInput.value.trim();
   if (!lyrics) return;
 
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('result-content').style.display = 'none';
   document.getElementById('loading-state').style.display = 'flex';
+  document.getElementById('result-meta').textContent = 'analyzing…';
 
   try {
     const res = await fetch(API_URL, {
@@ -779,18 +1415,17 @@ async function analyzeLyrics() {
     if (data.error) throw new Error(data.error);
     renderResult(data);
   } catch (err) {
-    document.getElementById('loading-state').style.display = 'none';
-    document.getElementById('empty-state').style.display = 'flex';
-    document.getElementById('empty-state').innerHTML = `
-      <div style="text-align:center; padding: 2rem;">
-        <div style="font-size:0.875rem; color:var(--red); font-weight:500; margin-bottom:0.5rem;">Cannot connect to backend</div>
-        <div style="font-size:0.8rem; color:var(--ink-ghost); font-weight:300; line-height:1.6;">
-          Make sure the API is running:<br>
-          <code style="background:var(--surface); padding:0.2rem 0.5rem; border-radius:4px; font-size:0.75rem;">uvicorn api:app --port 8000</code>
-        </div>
-      </div>`;
+    showError('Cannot reach the inference backend.');
   }
 }
+
+lyricsInput.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    analyzeLyrics();
+  }
+});
 </script>
+
 </body>
 </html>

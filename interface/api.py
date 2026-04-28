@@ -124,7 +124,26 @@ class LongformerPreprocessor:
 
 
 # ── Load model once at startup ──────────────────────────────────────────────
-MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "model")
+def _resolve_model_dir():
+    """Look for the model folder in a few sensible places.
+
+    Priority:
+      1. LYRICCERT_MODEL_DIR environment variable, if set
+      2. ./model relative to api.py (flat layout)
+      3. ../model relative to api.py (nested interface/ layout)
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.environ.get("LYRICCERT_MODEL_DIR"),
+        os.path.join(here, "model"),
+        os.path.join(here, "..", "model"),
+    ]
+    for c in candidates:
+        if c and os.path.isdir(c):
+            return os.path.abspath(c)
+    return os.path.join(here, "model")  # default for the error message
+
+MODEL_DIR = _resolve_model_dir()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 tokenizer = None

@@ -16,18 +16,24 @@ import nltk
 
 warnings.filterwarnings("ignore")
 
-# ── NLTK setup (same as original) ──────────────────────────────────────────
-try:
-    nltk.data.find('tokenizers/punkt')
-    nltk.data.find('corpora/stopwords')
-    nltk.data.find('corpora/wordnet')
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-    nltk.download('wordnet', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
+# ── NLTK setup ──────────────────────────────────────────────────────────────
+# NLTK 3.9 renamed several resources: punkt -> punkt_tab,
+# averaged_perceptron_tagger -> averaged_perceptron_tagger_eng.
+# Download both old and new names so the code works on any NLTK version.
+def _ensure_nltk_data():
+    packages = [
+        'punkt', 'punkt_tab',
+        'stopwords',
+        'wordnet', 'omw-1.4',
+        'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng',
+    ]
+    for pkg in packages:
+        try:
+            nltk.download(pkg, quiet=True)
+        except Exception:
+            pass  # ignore packages that don't exist on this NLTK version
+
+_ensure_nltk_data()
 
 from transformers import LongformerModel, LongformerConfig, LongformerTokenizer, PreTrainedModel
 

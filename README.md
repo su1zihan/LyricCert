@@ -67,3 +67,12 @@ The `model/` folder is missing or incomplete. Download the checkpoint again and 
 
 **Slow first analysis**
 The first run on a fresh machine downloads NLTK data. Wait a minute, then try again.
+
+**Resource `punkt_tab` not found**
+This means the NLTK data download did not finish. Stop the backend, then run this once in a Python shell, then start the backend again:
+
+```python
+import nltk
+nltk.download('punkt_tab')
+nltk.download('averaged_perceptron_tagger_eng')
+```
